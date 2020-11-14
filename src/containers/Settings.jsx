@@ -49,7 +49,9 @@ const inlineStyles = {
 const formatTextingHours = hour => moment(hour, "H").format("h a");
 class Settings extends React.Component {
   state = {
-    formIsSubmitting: false
+    formIsSubmitting: false,
+    textingHoursDialogOpen: false,
+    twilioDialogOpen: false
   };
 
   handleSubmitTextingHoursForm = async ({
@@ -375,26 +377,89 @@ class Settings extends React.Component {
             <CardHeader
               title="Overriding default settings"
               style={{ backgroundColor: theme.colors.green }}
-              actAsExpander={true}
-              showExpandableButton={true}
+              actAsExpander
+              showExpandableButton
             />
             <CardText expandable>
               <OrganizationFeatureSettings
-                formValues={this.props.data.organization}
                 organization={this.props.data.organization}
-                onSubmit={async () => {
-                  const { settings } = this.state;
-                  await this.props.mutations.editOrganization({
-                    settings
-                  });
-                  this.setState({ settings: null });
-                }}
-                onChange={formValues => {
-                  console.log("change", formValues);
-                  this.setState(formValues);
-                }}
                 saveLabel="Save settings"
-                saveDisabled={!this.state.settings}
+              />
+            </CardText>
+          </Card>
+        ) : null}
+
+        {this.props.data.organization &&
+        this.props.data.organization.vanEnabled ? (
+          <Card>
+            <CardHeader
+              title="NGP VAN API Settings"
+              style={{ backgroundColor: theme.colors.green }}
+              actAsExpander
+              showExpandableButton
+            />
+            <CardText expandable>
+              <OrganizationFeatureSettings
+                organization={this.props.data.organization}
+                fields={{
+                  NGP_VAN_API_KEY_ENCRYPTED: {
+                    schema: () =>
+                      yup
+                        .string()
+                        .max(64)
+                        .notRequired().nullable(),
+                    ready: true,
+                    component: props => {
+                      return (
+                        <Form.Field
+                          label="NGPVAN API Key"
+                          name="NGP_VAN_API_KEY_ENCRYPTED"
+                          fullWidth
+                        />
+                      );
+                    }
+                  },
+                  NGP_VAN_APP_NAME: {
+                    schema: () =>
+                      yup
+                        .string()
+                        .notRequired().nullable()
+                        .max(32),
+                    ready: true,
+                    component: props => {
+                      return (
+                        <Form.Field
+                          label="NGPVAN App Name"
+                          name="NGP_VAN_APP_NAME"
+                          fullWidth
+                        />
+                      );
+                    }
+                  },
+                  NGP_VAN_DATABASE_MODE: {
+                    schema: () =>
+                      yup.number()
+                        .oneOf([0, 1, null])
+                        .nullable()
+                        .transform(val => isNaN(val) ? null : val),
+                    ready: true,
+                    component: props => {
+                      return (
+                        <Form.Field
+                          type="select"
+                          label="NGP VAN Database Mode"
+                          name="NGP_VAN_DATABASE_MODE"
+                          choices={[
+                            {value: "", label: ""},
+                            {value: "0", label: "My Voters"},
+                            {value: "1", label: "My Campaign"},
+                          ]}
+                        />
+                      );
+                    }
+                  },
+                }}
+                saveLabel="Save VAN Settings"
               />
             </CardText>
           </Card>
@@ -457,6 +522,7 @@ const queries = {
           twilioAccountSid
           twilioAuthToken
           twilioMessageServiceSid
+          vanEnabled
         }
       }
     `,

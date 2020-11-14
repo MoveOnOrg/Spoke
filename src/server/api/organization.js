@@ -16,7 +16,10 @@ export const ownerConfigurable = {
   DEFAULT_BATCHSIZE: 1,
   DEFAULT_RESPONSEWINDOW: 1,
   MAX_CONTACTS_PER_TEXTER: 1,
-  MAX_MESSAGE_LENGTH: 1
+  MAX_MESSAGE_LENGTH: 1,
+  NGP_VAN_API_KEY_ENCRYPTED: 1,
+  NGP_VAN_APP_NAME: 1,
+  NGP_VAN_DATABASE_MODE: 1,
   // MESSAGE_HANDLERS: 1,
   // There is already an endpoint and widget for this:
   // opt_out_message: 1
@@ -179,7 +182,9 @@ export const resolvers = {
       const unsetFeatures = [];
       getAllowed(organization, user).forEach(f => {
         if (features.hasOwnProperty(f)) {
-          visibleFeatures[f] = features[f];
+          visibleFeatures[f] = f.endsWith('_ENCRYPTED')
+            ? '<Encrypted>'
+            : features[f];
         } else if (getConfig(f)) {
           visibleFeatures[f] = getConfig(f);
         } else {
@@ -289,6 +294,20 @@ export const resolvers = {
         }
       }
       return true;
+    },
+    vanEnabled: async (organization, _, { user }) => {
+      await accessRequired(user, organization.id, "SUPERVOLUNTEER");
+      return (
+        getConfig("ACTION_HANDLERS", organization, {
+          default: ''
+        }).includes('ngpvan-action') ||
+        getConfig("CONTACT_LOADERS", organization, {
+          default: ''
+        }).includes('ngpvan') ||
+        getConfig("MESSAGE_HANDLERS", organization, {
+          default: ''
+        }).includes('ngpvan')
+      );
     },
     phoneInventoryEnabled: async (organization, _, { user }) => {
       await accessRequired(user, organization.id, "SUPERVOLUNTEER", true);

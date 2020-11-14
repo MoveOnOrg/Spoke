@@ -1,9 +1,12 @@
-import type from "prop-types";
+import PropType from "prop-types";
 import React from "react";
+import loadData from "../containers/hoc/load-data";
+import gql from "graphql-tag";
 import GSForm from "../components/forms/GSForm";
 import yup from "yup";
 import Form from "react-formal";
 import Toggle from "material-ui/Toggle";
+import _ from "lodash";
 import { dataTest } from "../lib/attributes";
 
 const configurableFields = {
@@ -98,9 +101,9 @@ const configurableFields = {
   DEFAULT_BATCHSIZE: {
     schema: () =>
       yup
-        .number()
-        .integer()
-        .notRequired(),
+        .number().integer()
+        .notRequired().nullable()
+        .transform(val => isNaN(val) ? null : val),
     ready: true,
     component: props => {
       return (
@@ -119,7 +122,10 @@ const configurableFields = {
     }
   },
   DEFAULT_RESPONSEWINDOW: {
-    schema: () => yup.number().notRequired(),
+    schema: () => yup
+      .number().integer()
+      .notRequired().nullable()
+      .transform(val => isNaN(val) ? null : val),
     ready: true,
     component: props => {
       return (
@@ -142,9 +148,9 @@ const configurableFields = {
   MAX_CONTACTS_PER_TEXTER: {
     schema: () =>
       yup
-        .number()
-        .integer()
-        .notRequired(),
+        .number().integer()
+        .notRequired().nullable()
+        .transform(val => isNaN(val) ? null : val),
     ready: true,
     component: props => {
       return (
@@ -171,9 +177,9 @@ const configurableFields = {
   MAX_MESSAGE_LENGTH: {
     schema: () =>
       yup
-        .number()
-        .integer()
-        .notRequired(),
+        .number().integer()
+        .notRequired().nullable()
+        .transform(val => isNaN(val) ? null : val),
     ready: true,
     component: props => {
       return (
@@ -189,54 +195,56 @@ const configurableFields = {
         </div>
       );
     }
-  }
+  },
 };
 
-export default class OrganizationFeatureSettings extends React.Component {
+export class OrganizationFeatureSettings extends React.Component {
   constructor(props) {
     super(props);
-    const { formValues } = this.props;
+    this.fields = this.props.fields || configurableFields;
+    const { organization } = this.props;
     const settingsData =
-      (formValues.settings.featuresJSON &&
-        JSON.parse(formValues.settings.featuresJSON)) ||
+      (organization.settings.featuresJSON &&
+        JSON.parse(organization.settings.featuresJSON)) ||
       {};
-    this.state = { ...settingsData, unsetFeatures: [] };
+    this.state = { ...settingsData };
   }
 
   onChange = formValues => {
-    console.log("onChange", formValues);
-    this.setState(formValues, () => {
-      this.props.onChange({
-        settings: {
-          featuresJSON: JSON.stringify(this.state),
-          unsetFeatures: this.state.unsetFeatures
-        }
-      });
-    });
+    this.setState({...formValues, changed: true});
   };
 
   toggleChange = (key, value) => {
-    console.log("toggleChange", key, value);
-    this.setState({ [key]: value }, newData => {
-      this.props.onChange({
-        settings: {
-          featuresJSON: JSON.stringify(this.state),
-          unsetFeatures: this.state.unsetFeatures
-        }
-      });
-    });
+    this.setState({[key]: value, changed: true});
   };
+
+  onSubmit = async () => {
+    const formValues = _.pick(this.state, Object.keys(this.fields));
+    const settings = {
+      featuresJSON: JSON.stringify(formValues),
+      unsetFeatures: Object.keys(formValues).filter(f => formValues[f] === "")
+    }
+    await this.props.mutations.editOrganization({
+      settings
+    });
+    this.setState({ changed: false });
+  }
 
   render() {
     const schemaObject = {};
-    const adminItems = Object.keys(configurableFields)
-      .filter(f => configurableFields[f].ready && this.state.hasOwnProperty(f))
+    const adminItems = Object.keys(this.fields)
+      .filter(f => this.fields[f].ready
+        && this.state.hasOwnProperty(f))
       .map(f => {
-        schemaObject[f] = configurableFields[f].schema({
+        schemaObject[f] = this.fields[f].schema({
           ...this.props,
           ...this.state
         });
-        return configurableFields[f].component({ ...this.props, parent: this });
+        return (
+          <div key={f}>
+            {this.fields[f].component({ ...this.props, parent: this })}
+          </div>
+        );
       });
     return (
       <div>
@@ -248,9 +256,9 @@ export default class OrganizationFeatureSettings extends React.Component {
           {adminItems}
           <Form.Button
             type="submit"
-            onClick={this.props.onSubmit}
-            label={this.props.saveLabel}
-            disabled={this.props.saveDisabled}
+            onClick={this.onSubmit}
+            label={this.props.saveLabel || "Save Settings"}
+            disabled={!this.state.changed}
             {...dataTest("submitOrganizationFeatureSettings")}
           />
         </GSForm>
@@ -260,10 +268,37 @@ export default class OrganizationFeatureSettings extends React.Component {
 }
 
 OrganizationFeatureSettings.propTypes = {
-  formValues: type.object,
-  organization: type.object,
-  onChange: type.func,
-  onSubmit: type.func,
-  saveLabel: type.string,
-  saveDisabled: type.bool
+  organization: PropType.object,
+  fields: PropType.object,
+  saveLabel: PropType.string,
+  mutations: PropType.object
 };
+
+export const editOrganizationGql = gql`
+  mutation editOrganization(
+    $organizationId: String!
+    $organizationChanges: OrganizationInput!
+  ) {
+    editOrganization(id: $organizationId, organization: $organizationChanges) {
+      id
+      settings {
+        messageHandlers
+        actionHandlers
+        featuresJSON
+        unsetFeatures
+      }
+    }
+  }
+`;
+
+const mutations = {
+  editOrganization: ownProps => organizationChanges => ({
+    mutation: editOrganizationGql,
+    variables: {
+      organizationId: ownProps.organization.id,
+      organizationChanges
+    }
+  }),
+};
+
+export default loadData({ mutations })(OrganizationFeatureSettings);
