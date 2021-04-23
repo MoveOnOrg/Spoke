@@ -470,13 +470,6 @@ export default class CampaignTextersForm extends React.Component {
         >
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             {this.showSearch()}
-            <div>
-              <RaisedButton
-                {...dataTest("addAll")}
-                label="Add All"
-                onClick={() => this.addAllTexters()}
-              />
-            </div>
           </div>
           <div className={css(styles.sliderContainer)}>
             <div className={css(styles.headerContainer)}>
