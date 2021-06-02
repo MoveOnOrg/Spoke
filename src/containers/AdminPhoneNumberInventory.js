@@ -273,6 +273,9 @@ class AdminPhoneNumberInventory extends React.Component {
   }
 
   renderBuyNumbersForm() {
+    const service = this.props.data.organization.serviceVendor;
+    const serviceName = service.name;
+    const serviceConfig = service.config || "{}";
     return (
       <GSForm
         schema={this.buyNumbersFormSchema()}
@@ -294,7 +297,9 @@ class AdminPhoneNumberInventory extends React.Component {
             name="limit"
             {...dataTest("limit")}
           />
-          {this.props.data.organization.twilioMessageServiceSid &&
+          {serviceName === "twilio" &&
+          serviceConfig.TWILIO_MESSAGE_SERVICE_SID &&
+          serviceConfig.TWILIO_MESSAGE_SERVICE_SID.length > 0 &&
           !this.props.data.organization.campaignPhoneNumbersEnabled ? (
             <Form.Field
               label="Add to this organization's Messaging Service"
@@ -426,7 +431,10 @@ const queries = {
       query getOrganizationData($organizationId: String!) {
         organization(id: $organizationId) {
           id
-          twilioMessageServiceSid
+          serviceVendor {
+            name
+            config
+          }
           campaignPhoneNumbersEnabled
           phoneNumberCounts {
             areaCode

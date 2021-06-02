@@ -1,6 +1,11 @@
 import { accessRequired } from "./errors";
 import { mapFieldsToModel, mapFieldsOrNull } from "./lib/utils";
-import { errorDescriptions } from "./lib/twilio";
+import {
+  serviceMap,
+  getServiceNameFromOrganization,
+  errorDescription
+} from "../../extensions/service-vendors";
+import { getServiceManagerData } from "../../extensions/service-managers";
 import { Campaign, JobRequest, r, cacheableData } from "../models";
 import { getUsers } from "./user";
 import { getSideboxChoices } from "./organization";
@@ -8,7 +13,6 @@ import {
   getAvailableIngestMethods,
   getMethodChoiceData
 } from "../../extensions/contact-loaders";
-import twilio from "./lib/twilio";
 import { getConfig, getFeatures } from "./lib/config";
 import ownedPhoneNumber from "./lib/owned-phone-number";
 const title = 'lower("campaign"."title")';
@@ -252,15 +256,13 @@ export const resolvers = {
         .groupBy("error_code")
         .orderByRaw("count(*) DESC");
       const organization = loaders.organization.load(campaign.organization_id);
-      const isTwilio = getConfig("DEFAULT_SERVICE", organization) === "twilio";
       return errorCounts.map(e => ({
+        ...errorDescription(
+          e.error_code,
+          getServiceNameFromOrganization(organization)
+        ),
         code: String(e.error_code),
-        count: e.error_count,
-        description: errorDescriptions[e.error_code] || null,
-        link:
-          e.error_code > 0 && isTwilio
-            ? `https://www.twilio.com/docs/api/errors/${e.error_code}`
-            : null
+        count: e.error_count
       }));
     }
   },
@@ -683,7 +685,38 @@ export const resolvers = {
       }
       return "";
     },
-    // TODO: rename to messagingServicePhoneNumbers
+    serviceManagers: async (
+      campaign,
+      { fromCampaignStatsPage },
+      { user, loaders }
+    ) => {
+      await accessRequired(
+        user,
+        campaign.organization_id,
+        "SUPERVOLUNTEER",
+        true
+      );
+      const organization = await loaders.organization.load(
+        campaign.organization_id
+      );
+      const result = await getServiceManagerData(
+        "getCampaignData",
+        organization,
+        { organization, campaign, user, loaders, fromCampaignStatsPage }
+      );
+      return result.map(r => ({
+        id: `${r.name}-org${campaign.organization_id}-${campaign.id}${
+          fromCampaignStatsPage ? "stats" : ""
+        }`,
+        campaign,
+        organization,
+        // defaults
+        fullyConfigured: null,
+        unArchiveable: null,
+        data: null,
+        ...r
+      }));
+    },
     phoneNumbers: async (campaign, _, { user }) => {
       await accessRequired(
         user,
@@ -691,7 +724,7 @@ export const resolvers = {
         "SUPERVOLUNTEER",
         true
       );
-      const phoneNumbers = await twilio.getPhoneNumbersForService(
+      const phoneNumbers = await serviceMap.twilio.getPhoneNumbersForService(
         campaign.organization,
         campaign.messageservice_sid
       );
@@ -710,6 +743,7 @@ export const resolvers = {
     creator: async (campaign, _, { loaders }) =>
       campaign.creator_id ? loaders.user.load(campaign.creator_id) : null,
     isArchivedPermanently: campaign => {
+      // TODO: consider removal
       // started campaigns that have had their message service sid deleted can't be restarted
       // NOTE: this will need to change if campaign phone numbers are extended beyond twilio and fakeservice
       return (
