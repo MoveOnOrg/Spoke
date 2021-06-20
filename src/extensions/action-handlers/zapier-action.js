@@ -71,9 +71,80 @@ export async function onTagUpdate(
 
 // What happens when a texter saves the answer that triggers the action
 // This is presumably the meat of the action
-export async function processAction() {
+export async function processAction({
+  questionResponse,
+  interactionStep,
+  campaignContactId,
+  contact,
+  campaign,
+  organization,
+  previousValue
+}) {
   try {
-    throw new Error("zapier-action.processAction is not implemented");
+
+    const baseUrl = getConfig("BASE_URL", organization);
+    const conversationLink = `${baseUrl}/app/${organization.id}/todos/review/${contact.id}`;
+    const payload = {
+      questionResponse: questionResponse,
+      interactionStep: interactionStep,
+      campaignContactId: campaignContactId,
+      contact: contact,
+      campaign: campaign,
+      organization: organization,
+      previousValue: previousValue,
+      conversationLink: conversationLink
+    };
+
+    const stringifiedPayload = JSON.stringify(payload);
+
+    const url = getConfig("ZAPIER_WEBHOOK_URL", organization);
+    const zap_timeout = getConfig("ZAPIER_TIMEOUT_MS", organization) || 5000;
+    log.info(`Zapier timeout: ${zap_timeout}`);
+
+    var final_url = "";
+    const answer_option = interactionStep.answer_option;
+
+    const config = JSON.parse(getConfig("ZAPIER_CONFIG_OBJECT", organization)) || {};
+
+    if(Object.keys(config).length != 0) {
+      if(Array.isArray(config.processAction)) {
+        for(let item of config.processAction) {
+          if( typeof item.answer_name === 'string' && typeof item.webhook_url === 'string') {
+            if(answer_option === item.answer_name) {
+              final_url = item.webhook_url;
+            }
+	  }
+	}
+        if(final_url === "") {
+          log.info(`Did not find "${answer_option}" in ZAPIER_CONFIG_OBJECT. Using default URL from ZAPIER_WEBHOOK_URL.`);
+          final_url = url;
+	}
+      } else {
+        final_url = url;
+      }
+      
+    }
+    else {
+      final_url = url;
+    }
+
+    console.info(`Zapier processAction sending ${answer_option} to ${final_url}`);
+
+
+    //return httpRequest(dynamic_url, {
+    return httpRequest(final_url, {
+      method: "POST",
+      retries: 0,
+      timeout: zap_timeout,
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: stringifiedPayload,
+      validStatuses: [200],
+      compress: false
+    });
+
+
   } catch (caughtError) {
     log.error("Encountered exception in zapier.processAction", caughtError);
     throw caughtError;
