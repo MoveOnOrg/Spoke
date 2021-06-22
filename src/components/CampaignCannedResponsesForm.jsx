@@ -51,17 +51,27 @@ const styles = StyleSheet.create({
     display: "-webkit-box",
     WebkitBoxOrient: "vertical",
     WebkitLineClamp: 2,
-    overflow: "hidden",
-    height: 32
+    overflow: "hidden"
   }
 });
 
 export class CampaignCannedResponsesForm extends React.Component {
-  state = {
-    showForm: false,
-    formButtonText: "",
-    responseId: null
-  };
+  constructor(props) {
+    super(props);
+
+    this.state = {
+      showForm: false,
+      formButtonText: "",
+      responseId: null,
+      availableActionsLookup:
+        props.availableActions &&
+        props.availableActions.reduce((lookup, action) => {
+          const toReturn = { ...lookup };
+          toReturn[action.name] = action;
+          return toReturn;
+        }, {})
+    };
+  }
 
   formSchema = yup.object({
     cannedResponses: yup.array().of(
@@ -138,6 +148,7 @@ export class CampaignCannedResponsesForm extends React.Component {
               }}
               customFields={this.props.customFields}
               tags={this.props.data.organization.tags}
+              availableActions={this.props.availableActions}
             />
           </div>
         </div>
@@ -146,6 +157,7 @@ export class CampaignCannedResponsesForm extends React.Component {
   }
 
   listItems(cannedResponses) {
+    const { availableActionsLookup } = this.state;
     const listItems = cannedResponses.map(response => (
       <ListItem
         {...dataTest("cannedResponse")}
@@ -154,7 +166,17 @@ export class CampaignCannedResponsesForm extends React.Component {
       >
         <ListItemText>
           <div className={css(styles.title)}>{response.title}</div>
-          <div className={css(styles.text)}>{response.text}</div>
+          <div className={css(styles.text)}>
+            {response.answerActions ? (
+              <span>
+                Action: &nbsp;
+                {availableActionsLookup[response.answerActions].displayName}
+                &nbsp;{JSON.parse(response.answerActionsData || "{}").label}
+                <br />
+              </span>
+            ) : null}
+            <span>{response.text}</span>
+          </div>
           {response.tagIds && response.tagIds.length > 0 && (
             <TagChips
               tags={this.props.data.organization.tags}
@@ -244,7 +266,8 @@ CampaignCannedResponsesForm.propTypes = {
   formValues: type.object,
   customFields: type.array,
   organizationId: type.string,
-  data: type.object
+  data: type.object,
+  availableActions: type.array
 };
 
 const queries = {
