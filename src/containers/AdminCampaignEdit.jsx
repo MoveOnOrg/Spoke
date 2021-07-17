@@ -459,7 +459,9 @@ export class AdminCampaignEdit extends React.Component {
         }
       },
       {
-        title: "Interactions",
+        title: global.HIDE_BRANCHED_SCRIPTS
+          ? "Initial Outbound"
+          : "Interactions",
         content: CampaignInteractionStepsForm,
         keys: ["interactionSteps"],
         checkCompleted: () =>
