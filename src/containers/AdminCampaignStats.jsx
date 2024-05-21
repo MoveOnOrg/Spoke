@@ -350,9 +350,11 @@ class AdminCampaignStats extends React.Component {
             campaign.exportResults.campaignExportUrl.startsWith("http") ? (
               <div>
                 Most recent export:
+                <br />
                 <a href={campaign.exportResults.campaignExportUrl} download>
                   Contacts Export CSV
                 </a>
+                <br />
                 <a
                   href={campaign.exportResults.campaignMessagesExportUrl}
                   download
