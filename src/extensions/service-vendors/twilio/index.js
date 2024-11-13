@@ -1,7 +1,8 @@
 /* eslint-disable no-use-before-define, no-console */
 import _ from "lodash";
 import Twilio, { twiml } from "twilio";
-import urlJoin from "url-join";
+import { format as formatUrl } from "url";
+import { join as joinPath } from "path";
 import { log } from "../../../lib";
 import { getFormattedPhoneNumber } from "../../../lib/phone-format";
 import {
@@ -581,7 +582,21 @@ export async function handleIncomingMessage(message) {
     const finalMessage = await convertMessagePartsToMessage([
       pendingMessagePart
     ]);
-    console.log("Contact reply", finalMessage, pendingMessagePart);
+    console.log(
+      "Contact Reply\n", 
+      `\t| Message Status:      ${finalMessage.send_status}\n`,
+      `\t| From Contact? :      ${finalMessage.is_from_contact}\n`,
+      `\t| Contact Number:      ${finalMessage.contact_number}\n`, 
+      `\t| User Number:         ${finalMessage.user_number}\n`,
+      `\t| Text:                ${finalMessage.text.replace(/(\r\n|\n|\r)/gm, " ").substring(0, 45)}\n`,
+      `\t| Error Code:          ${finalMessage.error_code}\n`,
+      `\t| Service:             ${finalMessage.service || pendingMessagePart.service}\n`,
+      `\t| Media:               ${finalMessage.media.length === 0 ? "No media" : finalMessage.media}\n`,
+      `\t| Message Service SID: ${finalMessage.messageservice_sid}\n`,
+      `\t| Service ID:          ${finalMessage.service_id}\n`,
+      `\t| Parent ID:           ${pendingMessagePart.parent_id}\n`,
+      `\t| User ID:             ${finalMessage.user_id}`,
+    );
     if (finalMessage) {
       if (message.spokeCreatedAt) {
         finalMessage.created_at = message.spokeCreatedAt;
@@ -618,10 +633,10 @@ export async function getContactInfo({
     return {};
   }
   const twilio = await exports.getTwilio(organization);
-  const types = ["carrier"];
+  const types = { fields: "line_type_intelligence" };
   if (lookupName) {
     // caller-name is more expensive
-    types.push("caller-name");
+    types.fields = "line_type_intelligence,caller-name";
   }
   const contactInfo = {
     contact_number: contactNumber,
@@ -629,24 +644,26 @@ export async function getContactInfo({
     service: "twilio"
   };
   try {
-    const phoneNumber = await twilio.lookups.v1
+    const phoneNumber = await twilio.lookups.v2
       .phoneNumbers(contactNumber)
-      .fetch({ type: types });
+      .fetch(types);
 
-    if (phoneNumber.carrier) {
-      contactInfo.carrier = phoneNumber.carrier.name;
+    if (phoneNumber.lineTypeIntelligence.carrier_name) {
+      contactInfo.carrier = phoneNumber.lineTypeIntelligence.carrier_name;
     }
-    if (phoneNumber.carrier.error_code) {
+    if (phoneNumber.lineTypeIntelligence.error_code) {
       // e.g. 60600: Unprovisioned or Out of Coverage
       contactInfo.status_code = -2;
-      contactInfo.last_error_code = phoneNumber.carrier.error_code;
+      contactInfo.last_error_code = phoneNumber.lineTypeIntelligence.error_code;
     } else if (
-      phoneNumber.carrier.type &&
-      phoneNumber.carrier.type === "landline"
+      // mobile or landline
+      phoneNumber.lineTypeIntelligence.type &&
+      phoneNumber.lineTypeIntelligence.type === "landline"
     ) {
       // landline (not mobile or voip)
       contactInfo.status_code = -1;
     } else if (
+      // example: US
       phoneNumber.countryCode &&
       getConfig("PHONE_NUMBER_COUNTRY", organization) &&
       getConfig("PHONE_NUMBER_COUNTRY", organization) !==
@@ -654,8 +671,8 @@ export async function getContactInfo({
     ) {
       contactInfo.status_code = -3; // wrong country
     } else if (
-      phoneNumber.carrier.type &&
-      phoneNumber.carrier.type !== "landline"
+      phoneNumber.lineTypeIntelligence.type &&
+      phoneNumber.lineTypeIntelligence.type !== "landline"
     ) {
       // mobile, voip
       contactInfo.status_code = 1;
@@ -695,6 +712,7 @@ export async function getContactInfo({
  */
 export async function createMessagingService(organization, friendlyName) {
   console.log("twilio.createMessagingService", organization.id, friendlyName);
+  const urlJoin = (...parts) => formatUrl({ pathname: joinPath(...parts) });
   const twilio = await exports.getTwilio(organization);
   const twilioBaseUrl =
     getConfig("TWILIO_BASE_CALLBACK_URL", organization) ||

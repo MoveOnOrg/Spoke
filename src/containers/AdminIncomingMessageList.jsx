@@ -1,19 +1,18 @@
 import PropTypes from "prop-types";
 import React, { Component } from "react";
 import _ from "lodash";
-import { compose } from "react-apollo";
-
+import { flowRight as compose } from "lodash";
 import IncomingMessageActions from "../components/IncomingMessageActions";
 import IncomingMessageFilter, {
   ALL_CAMPAIGNS
 } from "../components/IncomingMessageFilter";
 import IncomingMessageList from "../components/IncomingMessageList";
 import PaginatedCampaignsRetriever from "./PaginatedCampaignsRetriever";
-import gql from "graphql-tag";
+import { gql } from "@apollo/client";
 import loadData from "./hoc/load-data";
 import { withRouter } from "react-router";
 import PaginatedUsersRetriever from "./PaginatedUsersRetriever";
-import * as queryString from "query-string";
+import queryString from "query-string";
 import {
   getConversationFiltersFromQuery,
   tagsFilterStateFromTagsFilter,
@@ -25,11 +24,15 @@ export class AdminIncomingMessageList extends Component {
   constructor(props) {
     super(props);
 
-    const query = props.location.query;
     const filters = getConversationFiltersFromQuery(
       props.location.query,
       props.organization.organization.tags
     );
+    // Make sure campaignIds is an array of numbers
+    filters.campaignsFilter = {
+      campaignIds: filters.campaignsFilter.campaignIds?.map(id => Number(id))
+    };
+
     this.state = {
       page: 0,
       pageSize: 10,
@@ -182,7 +185,7 @@ export class AdminIncomingMessageList extends Component {
   handleErrorCodeChange = async errorCode => {
     const contactsFilter = {
       ...this.state.contactsFilter,
-      errorCode: errorCode ? errorCode.split(",") : null
+      errorCode: errorCode ? errorCode.split(",").map(Number) : null
     };
     await this.setState({
       contactsFilter,
@@ -209,10 +212,17 @@ export class AdminIncomingMessageList extends Component {
   };
 
   handleReassignRequested = async newTexterUserId => {
+    const updatedCampaignIdsContactIds = this.state.campaignIdsContactIds.map(
+      campaign => {
+        campaign.campaignContactId = Number(campaign.campaignContactId);
+        campaign.messageIds = campaign.messageIds.map(id => Number(id));
+        return campaign;
+      }
+    );
     await this.props.mutations.reassignCampaignContacts(
       this.props.params.organizationId,
-      this.state.campaignIdsContactIds,
-      newTexterUserId
+      updatedCampaignIdsContactIds,
+      newTexterUserId.toString()
     );
     this.setState({
       utc: Date.now().toString(),
@@ -224,7 +234,7 @@ export class AdminIncomingMessageList extends Component {
   handleReassignAllMatchingRequested = async newTexterUserId => {
     await this.props.mutations.bulkReassignCampaignContacts(
       this.props.params.organizationId,
-      newTexterUserId,
+      newTexterUserId.toString(),
       this.state.campaignsFilter || {},
       this.state.assignmentsFilter || {},
       this.state.contactsFilter || {},
