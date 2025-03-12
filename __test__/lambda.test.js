@@ -1,4 +1,4 @@
-import { handler } from "../lambda.js";
+import { handler } from "../handler.js";
 
 describe("AWS Lambda", () => {
   test("completes request to lambda", async () => {

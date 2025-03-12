@@ -1,0 +1,30 @@
+service: spoke-test
+
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'staging'}  # Default to staging if no stage is provided
+  region: ${file(./stage.json):lambda.region}
+  profile: temporary # Optional: Enter the profile name from your ~/.aws/credentials
+  environment: ${file(./stage-env.json)}
+  deploymentBucket:
+    name: ${file(./stage-env.json):AWS_S3_BUCKET_NAME}
+
+functions:
+  appHandler:
+    handler: build/handler.handler
+    events:
+      - http:
+          path: /
+          method: ANY
+      - http:
+          path: /{proxy+}
+          method: ANY
+
+package:
+  individually: true
+  patterns:
+    - '!**'
+    - 'build/**'
