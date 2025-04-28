@@ -25,3 +25,5 @@ CONFIG_FILE.json
 scratch/
 cypress/screenshots
 cypress/videos
+spoke-pm2.config.js
+.serverless/

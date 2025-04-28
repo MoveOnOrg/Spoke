@@ -1,7 +1,6 @@
 import PropTypes from "prop-types";
 import React from "react";
 import { css } from "aphrodite";
-import { compose } from "recompose";
 import Toolbar from "./Toolbar";
 import MessageList from "./MessageList";
 import Survey from "./Survey";
@@ -36,6 +35,7 @@ import {
 import { dataTest } from "../../lib/attributes";
 import ContactToolbar from "./ContactToolbar";
 import { getCookie, setCookie } from "../../lib/cookie";
+import { deepCopy } from "../utils";
 
 export class AssignmentTexterContactControls extends React.Component {
   constructor(props) {
@@ -126,7 +126,9 @@ export class AssignmentTexterContactControls extends React.Component {
     let currentInteractionStep = null;
 
     if (availableSteps.length > 0) {
-      currentInteractionStep = availableSteps[availableSteps.length - 1];
+      currentInteractionStep = deepCopy(
+        availableSteps[availableSteps.length - 1]
+      );
       currentInteractionStep.question.filteredAnswerOptions =
         currentInteractionStep.question.answerOptions;
     }
@@ -510,7 +512,6 @@ export class AssignmentTexterContactControls extends React.Component {
       filteredCannedResponses
     } = this.state;
     const { messages } = contact;
-
     const availableInteractionSteps = getAvailableInteractionSteps(
       questionResponses,
       campaign.interactionSteps
@@ -518,8 +519,8 @@ export class AssignmentTexterContactControls extends React.Component {
 
     const otherResponsesLink =
       currentInteractionStep &&
-        currentInteractionStep.question.filteredAnswerOptions.length > 6 &&
-        filteredCannedResponses.length ? (
+      currentInteractionStep.question.filteredAnswerOptions.length > 6 &&
+      filteredCannedResponses.length ? (
         <div className={css(flexStyles.popoverLink)} key={"otherresponses"}>
           <a
             href="#otherresponses"
@@ -532,8 +533,8 @@ export class AssignmentTexterContactControls extends React.Component {
 
     const searchBar = currentInteractionStep &&
       currentInteractionStep.question.answerOptions.length +
-      campaign.cannedResponses.length >
-      5 && (
+        campaign.cannedResponses.length >
+        5 && (
         <SearchBar
           onRequestSearch={this.handleSearchChange}
           onChange={this.handleSearchChange}
@@ -612,9 +613,9 @@ export class AssignmentTexterContactControls extends React.Component {
             onClick={onClick("needsResponse")}
             style={{
               color: this.props.muiTheme.palette.text.primary,
-              backgroundColor: this.props.muiTheme.palette.background.default
+              backgroundColor: this.props.muiTheme.palette.background.default,
+              flex: "1 1 auto"
             }}
-            style={{ flex: "1 1 auto" }}
             disabled={!!this.props.contact.optOut}
             color="default"
             variant="contained"
@@ -778,7 +779,7 @@ export class AssignmentTexterContactControls extends React.Component {
             }}
             multiline
             fullWidth
-            rowsMax={6}
+            maxRows={6}
           />
         </GSForm>
       </div>
@@ -832,8 +833,8 @@ export class AssignmentTexterContactControls extends React.Component {
       currentQuestionAnswered = questionResponses[currentInteractionStep.id];
       const dupeTester = {};
       const shortener = answerValue => {
-        // label is for one-word values or e.g. "Yes: ...."
-        const label = answerValue.match(/^(\w+)([^\s\w]|$)/);
+        // label is for one-word values or e.g. "Yes: ...." or "[Yes] ..."
+        const label = answerValue.match(/^\W?(\w+)([^\s\w]|$)/);
         return label ? label[1] : answerValue;
       };
       currentQuestionOptions = currentQuestion.answerOptions
@@ -888,9 +889,9 @@ export class AssignmentTexterContactControls extends React.Component {
       shortCannedResponses = shortCannedResponses.filter(script => {
         var textLength = global.HIDE_BRANCHED_SCRIPTS
           ? this.getShortButtonText(
-            script.title,
-            cannedResponseScript ? 40 : 13
-          ).length
+              script.title,
+              cannedResponseScript ? 40 : 13
+            ).length
           : script.title.length;
 
         if (joinedLength + 1 + textLength < 80) {
@@ -973,7 +974,7 @@ export class AssignmentTexterContactControls extends React.Component {
       <div className={css(flexStyles.subButtonsExitButtons)}>
         <Button
           onClick={
-            !disabled ? this.handleOpenAnswerResponsePopover : noAction => { }
+            !disabled ? this.handleOpenAnswerResponsePopover : noAction => {}
           }
           style={{
             backgroundColor: this.props.muiTheme.palette.background.default,
@@ -1172,6 +1173,12 @@ export class AssignmentTexterContactControls extends React.Component {
 
   renderFirstMessage(enabledSideboxes) {
     const { contact } = this.props;
+    if (window.DOWNTIME_NO_INITIAL) {
+      return [
+        this.renderToolbar(enabledSideboxes),
+        <div>Sending initial messages is currently paused. You can still reply to any incoming messages.</div>
+      ];
+    }
     return [
       this.renderToolbar(enabledSideboxes),
       <ContactToolbar
@@ -1205,40 +1212,40 @@ export class AssignmentTexterContactControls extends React.Component {
     const content = firstMessage
       ? this.renderFirstMessage(enabledSideboxes)
       : [
-        this.renderToolbar(enabledSideboxes),
-        <div
-          key="superSectionMessagePage"
-          className={css(flexStyles.superSectionMessagePage)}
-        >
-          {this.state.contactListOpen &&
-            this.renderAssignmentContactsList(
-              this.props.assignment.contacts,
-              this.props.contact,
-              this.props.updateCurrentContactById
-            )}
-          <div className={css(flexStyles.superSectionMessageListAndControls)}>
-            <ContactToolbar
-              campaignContact={this.props.contact}
-              campaign={this.props.campaign}
-              navigationToolbarChildren={this.props.navigationToolbarChildren}
-              toggleContactList={this.toggleContactList}
-            />
-            {this.renderMessageBox(
-              <MessageList
-                contact={this.props.contact}
-                currentUser={this.props.currentUser}
-                messages={this.props.contact.messages}
-                organizationId={this.props.organizationId}
-                review={this.props.review}
-                styles={messageListStyles}
-                hideMedia={this.state.hideMedia}
-              />,
-              enabledSideboxes
-            )}
-            {this.renderMessageControls(enabledSideboxes)}
+          this.renderToolbar(enabledSideboxes),
+          <div
+            key="superSectionMessagePage"
+            className={css(flexStyles.superSectionMessagePage)}
+          >
+            {this.state.contactListOpen &&
+              this.renderAssignmentContactsList(
+                this.props.assignment.contacts,
+                this.props.contact,
+                this.props.updateCurrentContactById
+              )}
+            <div className={css(flexStyles.superSectionMessageListAndControls)}>
+              <ContactToolbar
+                campaignContact={this.props.contact}
+                campaign={this.props.campaign}
+                navigationToolbarChildren={this.props.navigationToolbarChildren}
+                toggleContactList={this.toggleContactList}
+              />
+              {this.renderMessageBox(
+                <MessageList
+                  contact={this.props.contact}
+                  currentUser={this.props.currentUser}
+                  messages={this.props.contact.messages}
+                  organizationId={this.props.organizationId}
+                  review={this.props.review}
+                  styles={messageListStyles}
+                  hideMedia={this.state.hideMedia}
+                />,
+                enabledSideboxes
+              )}
+              {this.renderMessageControls(enabledSideboxes)}
+            </div>
           </div>
-        </div>
-      ];
+        ];
     return (
       <div
         className={css(flexStyles.topContainer)}
@@ -1287,4 +1294,4 @@ AssignmentTexterContactControls.propTypes = {
   updateCurrentContactById: PropTypes.func
 };
 
-export default compose(withMuiTheme)(AssignmentTexterContactControls);
+export default withMuiTheme(AssignmentTexterContactControls);

@@ -1,23 +1,21 @@
 "use strict";
-const AWS = require("aws-sdk");
-const awsServerlessExpress = require("aws-serverless-express");
-let app, server, jobs, dispatcher;
+const awsServerlessExpress = require("@codegenie/serverless-express");
 
+let app, jobs, dispatcher;
 let invocationContext = {};
 let invocationEvent = {};
 
 if (process.env.DOWNTIME_NO_DB) {
-  app = require("./build/server/server/downtime");
+  app = require("./build/server/server/downtime").default;
   server = awsServerlessExpress.createServer(app.default);
   jobs = {};
 } else {
   try {
-    app = require("./build/server/server/index");
-    server = awsServerlessExpress.createServer(app.default);
+    app = require("./build/server/server/index").default;
     jobs = require("./build/server/workers/job-processes");
     dispatcher = require("./build/server/extensions/job-runners/lambda-async/handler");
 
-    app.default.set("awsContextGetter", function(req, res) {
+    app.set("awsContextGetter", function(req, res) {
       return [invocationEvent, invocationContext];
     });
   } catch (err) {
@@ -25,15 +23,10 @@ if (process.env.DOWNTIME_NO_DB) {
       console.error(`Unable to load built server: ${err}`);
     }
   }
-  /*
-  app = require("./src/server/index");
-  server = awsServerlessExpress.createServer(app.default);
-  jobs = require("./src/workers/job-processes");
-  */
 }
 
 // NOTE: the downside of loading above is environment variables are initially loaded immediately,
-//       so changing them means that the code must test environment variable inline (rather than use a const set on-load)
+// so changing them means that the code must test environment variable inline (rather than use a const set on-load)
 // We should NOT load app and server inside the handler, or all connection pools and state are re-instantiated per-request:
 // See: http://docs.aws.amazon.com/lambda/latest/dg/best-practices.html#function-code
 // "Separate the Lambda handler (entry point) from your core logic"
@@ -48,6 +41,8 @@ function cleanHeaders(event) {
     delete event.multiValueHeaders["X-Twilio-Body"];
   }
 }
+
+const handlerFromExpress = serverlessExpress({ app });
 
 exports.handler = async (event, context) => {
   // Note: When lambda is called with invoke() we MUST return with success
@@ -72,12 +67,9 @@ exports.handler = async (event, context) => {
     invocationEvent = event;
     invocationContext = context;
     cleanHeaders(event);
-    const webResponse = awsServerlessExpress.proxy(
-      server,
-      event,
-      context,
-      "PROMISE"
-    ).promise;
+
+    const webResponse = await handlerFromExpress(event, context);
+
     if (process.env.DEBUG_SCALING) {
       const endTime = context.getRemainingTimeInMillis
         ? context.getRemainingTimeInMillis()
@@ -96,7 +88,6 @@ exports.handler = async (event, context) => {
     return webResponse;
   } else {
     // handle a custom command sent as an event
-    const functionName = context.functionName;
     if (event.env) {
       for (var a in event.env) {
         process.env[a] = event.env[a];

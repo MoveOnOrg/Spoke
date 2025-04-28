@@ -1,14 +1,18 @@
+require("@babel/register");
+require("babel-polyfill");
 const { defineConfig } = require('cypress')
 
 module.exports = defineConfig({
-  fixturesFolder: '__test__/cypress/fixtures',
-  video: true,
   e2e: {
+    baseUrl: "http://localhost:3001",
+    specPattern: "__test__/cypress/integration/*",
+    fixturesFolder: "__test__/cypress/fixtures",
+    supportFile: "__test__/cypress/support/e2e.js",
+    video: true,
     setupNodeEvents(on, config) {
-      return require('./__test__/cypress/plugins/index.js')(on, config)
-    },
-    baseUrl: 'http://localhost:3001',
-    specPattern: '__test__/cypress/integration/*.test.js',
-    supportFile: '__test__/cypress/support/index.js',
+        require("./__test__/cypress/plugins/tasks").defineTasks(on, config);
+        // bind to the event we care about
+
+      },
   },
 })

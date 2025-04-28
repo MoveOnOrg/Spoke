@@ -1,6 +1,6 @@
 import PropTypes from "prop-types";
 import React from "react";
-import gql from "graphql-tag";
+import { gql } from "@apollo/client";
 import * as yup from "yup";
 import Form from "react-formal";
 
@@ -48,6 +48,9 @@ const inlineStyles = {
   cancelButton: {
     marginTop: 15,
     marginRight: 5
+  },
+  deleteButton: {
+    marginTop: 15
   }
 };
 
@@ -263,9 +266,6 @@ class AdminPhoneNumberInventory extends React.Component {
   }
 
   renderBuyNumbersForm() {
-    const service = this.props.data.organization.serviceVendor;
-    const serviceName = service.name;
-    const serviceConfig = service.config || "{}";
     return (
       <GSForm
         schema={this.buyNumbersFormSchema()}
@@ -420,8 +420,8 @@ class AdminPhoneNumberInventory extends React.Component {
             </Button>
             <Button
               variant="contained"
-              color="secondary"
-              variant="outlined"
+              color="primary"
+              style={inlineStyles.deleteButton}
               onClick={this.handleDeletePhoneNumbersSubmit}
             >
               Delete {this.state.deleteNumbersCount} Numbers
@@ -492,7 +492,7 @@ const mutations = {
     variables: {
       organizationId: ownProps.params.organizationId,
       areaCode,
-      limit
+      limit: parseInt(limit)
     },
     refetchQueries: () => ["getOrganizationData"]
   }),

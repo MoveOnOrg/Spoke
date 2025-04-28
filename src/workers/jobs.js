@@ -26,7 +26,17 @@ import {
 import importScriptFromDocument from "../server/api/lib/import-script";
 import { rawIngestMethod } from "../extensions/contact-loaders";
 
-import AWS from "aws-sdk";
+import { Lambda } from "@aws-sdk/client-lambda";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+  CreateBucketCommand,
+  HeadBucketCommand,
+  GetObjectCommand,
+  waitUntilBucketExists,
+  S3Client,
+  PutObjectCommand
+} from "@aws-sdk/client-s3";
+import { SQS } from "@aws-sdk/client-sqs";
 import Papa from "papaparse";
 import moment from "moment";
 import { sendEmail } from "../server/mail";
@@ -131,7 +141,7 @@ export async function sendJobToAWSLambda(job) {
     console.log("LAMBDA INVOCATION FAILED: JOB NOT INVOKABLE", job);
     return Promise.reject("Job type not available in job-processes");
   }
-  const lambda = new AWS.Lambda();
+  const lambda = new Lambda();
   const lambdaPayload = JSON.stringify(job);
   if (lambdaPayload.length > 128000) {
     console.log("LAMBDA INVOCATION FAILED PAYLOAD TOO LARGE");
@@ -169,7 +179,7 @@ export async function processSqsMessages(TWILIO_SQS_QUEUE_URL) {
     return Promise.reject("TWILIO_SQS_QUEUE_URL not set");
   }
 
-  const sqs = new AWS.SQS();
+  const sqs = new SQS();
 
   const params = {
     QueueUrl: TWILIO_SQS_QUEUE_URL,
@@ -206,7 +216,6 @@ export async function processSqsMessages(TWILIO_SQS_QUEUE_URL) {
                 QueueUrl: TWILIO_SQS_QUEUE_URL,
                 ReceiptHandle: message.ReceiptHandle
               })
-              .promise()
               .catch(reject);
             if (process.env.DEBUG) {
               console.log("processSqsMessages deleteresult", delMessageData);
@@ -859,9 +868,51 @@ export async function exportCampaign(job) {
     (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY)
   ) {
     try {
-      const s3bucket = new AWS.S3({
-        params: { Bucket: process.env.AWS_S3_BUCKET_NAME }
+      const client = new S3Client({
+        region: process.env.AWS_REGION
       });
+      const bucketName = process.env.AWS_S3_BUCKET_NAME;
+
+      try {
+        // Check if the S3 bucket already exists
+        const verifyBucketCommand = new HeadBucketCommand({
+          Bucket: bucketName
+        });
+        await client.send(verifyBucketCommand);
+
+        console.log(`S3 bucket "${bucketName}" already exists.`);
+      } catch (error) {
+        if (error.name === "NotFound") {
+          console.log(
+            `S3 bucket "${bucketName}" not found. Creating a new bucket.`
+          );
+
+          try {
+            // Create the S3 bucket
+            const createBucketCommand = new CreateBucketCommand({
+              Bucket: bucketName
+            });
+            await client.send(createBucketCommand);
+
+            console.log(`S3 bucket "${bucketName}" created successfully.`);
+          } catch (createError) {
+            console.error(
+              `Error creating bucket "${bucketName}":`,
+              createError
+            );
+          }
+        } else {
+          console.error("Error checking bucket existence:", error);
+        }
+      }
+
+      // verifies that the bucket exists before moving forward
+      // if for some reason this fails, Spoke defensively deletes the job
+      await waitUntilBucketExists(
+        { client, maxWaitTime: 15 },
+        { Bucket: bucketName }
+      );
+
       const campaignTitle = campaign.title
         .replace(/ /g, "_")
         .replace(/\//g, "_");
@@ -869,35 +920,54 @@ export async function exportCampaign(job) {
         "YYYY-MM-DD-HH-mm-ss"
       )}.csv`;
       const messageKey = `${key}-messages.csv`;
-      let params = { Key: key, Body: campaignCsv };
-      await s3bucket.putObject(params).promise();
-      params = { Key: key, Expires: 86400 };
-      const campaignExportUrl = await s3bucket.getSignedUrl(
-        "getObject",
-        params
-      );
-      params = { Key: messageKey, Body: messageCsv };
-      await s3bucket.putObject(params).promise();
-      params = { Key: messageKey, Expires: 86400 };
-      const campaignMessagesExportUrl = await s3bucket.getSignedUrl(
-        "getObject",
-        params
-      );
+      let params = { Key: key, 
+                     Body: campaignCsv, 
+                     Bucket: bucketName };
+      await client.send(new PutObjectCommand(params));
+      params = { Key: key, 
+                 Expires: 86400, 
+                 Bucket: bucketName };
+      const campaignExportUrl = await getSignedUrl(client, new GetObjectCommand(params));
+      params = { Key: messageKey, 
+                 Body: messageCsv, 
+                 Bucket: bucketName };
+      await client.send(new PutObjectCommand(params));
+      params = { Key: messageKey, 
+                 Expires: 86400,
+                 Bucket: bucketName };
+      const campaignMessagesExportUrl = await getSignedUrl(client, new GetObjectCommand(params));
       exportResults.campaignExportUrl = campaignExportUrl;
       exportResults.campaignMessagesExportUrl = campaignMessagesExportUrl;
 
-      await sendEmail({
-        to: user.email,
-        subject: `Export ready for ${campaign.title}`,
-        text: `Your Spoke exports are ready! These URLs will be valid for 24 hours.
-        Campaign export: ${campaignExportUrl}
-        Message export: ${campaignMessagesExportUrl}`
-      }).catch(err => {
-        log.error(err);
-        log.info(`Campaign Export URL - ${campaignExportUrl}`);
-        log.info(`Campaign Messages Export URL - ${campaignMessagesExportUrl}`);
-      });
-      log.info(`Successfully exported ${id}`);
+      // extreme check on email set-up
+      if ((
+        process.env.EMAIL_FROM &&
+        process.env.EMAIL_HOST &&
+        process.env.EMAIL_HOST_PASSWORD &&
+        process.env.EMAIL_HOST_PORT &&
+        process.env.EMAIL_HOST_USER) ||
+        (
+        process.env.MAILGUN_DOMAIN &&
+        process.env.MAILGUN_SMTP_LOGIN &&
+        process.env.MAILGUN_SMTP_PASSWORD &&
+        process.env.MAILGUN_SMTP_PORT &&
+        process.env.MAILGUN_SMTP_SERVER &&
+        process.env.MAILGUN_PUBLIC_KEY
+        )
+      ) {
+        await sendEmail({
+          to: user.email,
+          subject: `Export ready for ${campaign.title}`,
+          text: `Your Spoke exports are ready! These URLs will be valid for 24 hours.
+          Campaign export: ${campaignExportUrl}
+          Message export: ${campaignMessagesExportUrl}`
+        }).catch(err => {
+          log.error(err);
+          log.info(`Campaign Export URL - ${campaignExportUrl}`);
+          log.info(`Campaign Messages Export URL - ${campaignMessagesExportUrl}`);
+        });
+        log.info(`Successfully exported ${id}`);
+      }
     } catch (err) {
       log.error(err);
       exportResults.error = err.message;
@@ -924,7 +994,7 @@ export async function exportCampaign(job) {
     log.debug(campaignCsv);
     log.debug(messageCsv);
   }
-  if (exportResults.campaignExportUrl) {
+  if (exportResults.campaignExportUrl || exportResults.error) {
     exportResults.createdAt = String(new Date());
     await cacheableData.campaign.saveExportData(campaign.id, exportResults);
   }

@@ -1,4 +1,25 @@
 ## Getting started
+---
+### Operating System
+If you are already using a Linux based operating system, please continue to the next steps!
+
+Supporting the development of Spoke can be unnecessarily difficult in Windows, so we strongly recommend you use Windows Subsystem for Linux (WSL). 
+
+WSL allows users to run Linux virtual environments and applications within Windows. 
+Further information can be found [here](https://learn.microsoft.com/en-us/windows/wsl/about).
+1. Download WLS in the CMD as Administrator
+- WSL comes in two flavors, WSL1 and WSL2. This will install WSL2, and is needed to run the application correctly. Look into this [document](https://learn.microsoft.com/en-us/windows/wsl/install) from Microsoft if you need to upgrade from WSL1.
+- Installing WSL2 will default to **Ubuntu**, which is a flavor of Linux and is recommended. 
+```
+wsl --install
+```
+
+2. Restart your PC.
+   
+3. Allow your computer to reboot, and Ubuntu will finish installation. Ubuntu will be an application on you PC that you can search for. Please run all future commands found in this document in Ubuntu.
+  - Ubuntu will ask you to make a username and password. Please use a password vault or other password manager to store these details. You do not want to lose these.
+
+**NOTE**: In the event that WSL needs _Virtualization_ enabled, please follow [these steps](https://www.geeksforgeeks.org/how-to-enable-virtualization-vt-x-in-windows-10-bios/) to enable _Virtualization_ in your bios.
 
 ---
 ### [Repository](https://github.com/StateVoicesNational/Spoke)
@@ -41,9 +62,10 @@ From the spoke directory:
    - at this time of this writing, nvm install will install a version above 17 but we want to run 12.  Yarn will have to be installed again, even if you have yarn installed already, as it will need to be compatible with this version of nvm. 
     
 2. Install yarn.
-
-- Yarn is a package manager that will download all required packages to run Spoke.
-- Install using the [directions provided by Yarn](https://yarnpkg.com/en/docs/install).
+   ```
+   npm install --global yarn
+   ```
+   - Yarn is a package manager that will download all required packages to run Spoke.
 
 3. Install the packages.
    ```
@@ -76,14 +98,15 @@ Docker is optional, but can help with a consistent development environment using
 1. Install docker and docker compose
 
 - Docker allows you to run apps in containers and can be installed [here with Docker's instructions](https://docs.docker.com/desktop/)
-- Docker Compose is the tool used to create and run docker configurations. If you installed Docker on Mac, you already have Docker Compose, if you're using Linux or Windows you can install Docker Compose [with these instructions](https://docs.docker.com/compose/install/)
+- Docker Compose is the tool used to create and run docker configurations. If you installed Docker on Mac, a good way to install Docker Compose is to use [homebrew](https://brew.sh/). Once you have homebrew set up, you can run `brew install docker-compose`. if you're using Linux or Windows you can install Docker Compose [with these instructions](https://docs.docker.com/compose/install/)
 
-2. Make sure Docker is running on your machine and then build and run Spoke with `docker-compose up -d` to run redis and postgres in the background
-   - You can stop docker compose at any time with `docker-compose down`, and data will persist next time you run `docker-compose up`.
+2. Make sure Docker is running on your machine and then build and run Spoke with `docker compose up -d` to run redis and postgres in the background
+   - You can stop docker compose at any time with `docker compose down`, and data will persist next time you run `docker compose up`.
+   - **Note!** - `docker-compose` should in theory work with ComposeV2 as Docker considers it an alias for `docker compose`. [Read more about the migration of Compose](https://docs.docker.com/compose/migrate/#what-does-this-mean-for-my-projects-that-use-compose-v1)
 
 3. Run `./dev-tools/create-test-database` to populate the test database
 
-4. When done testing, clean up resources with `docker-compose down`, or `docker-compose down -v` to **_completely destroy_** your Postgres database & Redis datastore volumes.
+4. When done testing, clean up resources with `docker compose down`, or `docker compose down -v` to **_completely destroy_** your Postgres database & Redis datastore volumes.
 
 ### Getting the app running
 

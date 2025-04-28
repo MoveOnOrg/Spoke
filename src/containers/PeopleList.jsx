@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import { Link } from "react-router";
 import type from "prop-types";
 import loadData from "./hoc/load-data";
-import gql from "graphql-tag";
+import { gql } from "@apollo/client";
 import LoadingIndicator from "../components/LoadingIndicator";
 
 import OpenInNewIcon from "@material-ui/icons/OpenInNew";
@@ -263,11 +263,11 @@ export class PeopleList extends Component {
   };
 
   renderChangePasswordButton = (value, tableMeta) => {
-    const texterId = tableMeta.rowData[0];
+    const texterId = Number(tableMeta.rowData[0]);
     const { currentUser } = this.props;
     return (
       <Button
-        disabled={currentUser.id === texterId}
+        disabled={currentUser.id == texterId}
         onClick={() => {
           this.resetPassword(texterId);
         }}

@@ -6,7 +6,7 @@ import LoadingIndicator from "../components/LoadingIndicator";
 import AssignmentSummary from "../components/AssignmentSummary";
 import Snackbar from "@material-ui/core/Snackbar";
 import loadData from "./hoc/load-data";
-import gql from "graphql-tag";
+import { gql } from "@apollo/client";
 import { withRouter } from "react-router";
 
 let refreshOnReturn = false;
@@ -38,7 +38,6 @@ class TexterTodoList extends React.Component {
       this.props.notifications.stopPolling();
       this.props.notifications.startPolling(notificationPollDelay);
       // move the result to state
-      nextProps.notifications.user.notifications = [];
       // FUTURE: maybe append for a set of assignmentIds to display them
       nextState.notifications = notifications;
     }
@@ -58,7 +57,8 @@ class TexterTodoList extends React.Component {
   }
 
   renderTodoList(assignments) {
-    return assignments
+    const sortedAssignments = [...assignments];
+    return sortedAssignments
       .sort((x, y) => {
         // Sort with feedback at the top, and then based on Text assignment size
         const xHasFeedback =
@@ -136,7 +136,8 @@ class TexterTodoList extends React.Component {
         <Snackbar
           open={Boolean(this.state.notifications)}
           message={"Some campaigns have replies for you to respond to!"}
-          onClose={() => {
+          autoHideDuration={4000}
+	        onClose={() => {
             this.setState({ notifications: false });
           }}
         />
@@ -266,7 +267,7 @@ const queries = {
     query: dataQuery,
     options: ownProps => ({
       variables: {
-        userId: ownProps.params.userId || null,
+        userId: parseInt(ownProps.params.userId) || null,
         organizationId: ownProps.params.organizationId,
         todosOrg:
           ownProps.location.query["org"] == "all" ||
@@ -301,7 +302,7 @@ const queries = {
         );
       return {
         variables: {
-          userId: ownProps.params.userId || null,
+          userId: parseInt(ownProps.params.userId) || null,
           organizationId: ownProps.params.organizationId
         },
         fetchPolicy: "network-only",

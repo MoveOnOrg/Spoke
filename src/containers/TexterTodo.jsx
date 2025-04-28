@@ -3,7 +3,7 @@ import React from "react";
 import ContactController from "../components/AssignmentTexter/ContactController";
 import { withRouter } from "react-router";
 import loadData from "./hoc/load-data";
-import gql from "graphql-tag";
+import { gql } from "@apollo/client";
 
 export const contactDataFragment = `
         id
@@ -276,7 +276,7 @@ const queries = {
         ownProps.location.query.review === "1"
           ? {
               messageStatus,
-              errorCode: ["0"],
+              errorCode: [0],
               ...(ownProps.params.reviewContactId && {
                 contactId: ownProps.params.reviewContactId
               })
